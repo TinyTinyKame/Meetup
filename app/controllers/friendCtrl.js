@@ -85,6 +85,39 @@ module.exports.friendRequest = function (req, res) {
 	}
     });
 };
+
+module.exports.confirmFriend = function (req, res) {
+    var friend_to_add = req.friend;
+    var auth          = jwt.decode(req.token);
+    var promise       = User.findOne({_id: auth._id}).exec();
+    promise.addErrback(function (err) {
+        if (err) {
+            return res.status(400).json(err);
+        }
+    });
+    promise.then(function (user) {
+	user.friends.forEach(function (friend, index) {
+	    if (friend.user._id.equals(friend_to_add._id)) {
+		user.friends[index].status = 'Accepted';
+		user.save(function (err, user) {
+		    if (err) {
+			return res.status(400).json('Error while accepting friend');
+		    }
+		    if (user) {
+			User.populate(user, {$path: 'friends'}, function (err, user) {
+			    if (err) {
+				return res.status(400).json('Error while populating user');
+			    }
+			    if (user) {
+				return res.status(201).json(user);
+			    }
+			});
+		    }
+		});
+	    }
+	});
+    });
+}
     
 module.exports.deleteFriend = function (req, res) {
     var friend  = req.friend;

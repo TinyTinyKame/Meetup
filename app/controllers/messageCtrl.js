@@ -75,7 +75,9 @@ module.exports.createMessageForEvent = function (req, res) {
 					var message   = new gcm.Message();
 					var gcmTokens = [];
 					event.users.forEach(function (user) {
-					    gcmTokens.push(user.user.gcmToken);
+					    if (!user.user._id.equals(auth._id)) {
+						gcmTokens.push(user.user.gcmToken);
+					    }
 					});
 					var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
 					message.addData('newMessage in ' + event.name + ' !');

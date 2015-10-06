@@ -94,7 +94,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
                 type: req.body.type,
 		category: req.body.category,
                 locations: location._id,
-                date: req.body.date,
+                date: new Date(req.body.date).getTime(),
 		description: req.body.description,
                 admin: auth._id
 	    };
