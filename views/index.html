@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Meet up !</title>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
+        <link rel="stylesheet" href="https://storage.googleapis.com/code.getmdl.io/1.0.4/material.blue-red.min.css">
+
+        <script src="https://storage.googleapis.com/code.getmdl.io/1.0.4/material.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+        <style type="text/css">
+            #map { height: calc(100vh - 95px); }
+        </style>
+    </head>
+    <body>
+        <!-- Always shows a header, even in smaller screens. -->
+        <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+            <header class="mdl-layout__header">
+                <div class="mdl-layout__header-row">
+                    <!-- Title -->
+                    <span class="mdl-layout-title">Meet up !</span>
+                    <!-- Add spacer, to align navigation to the right -->
+                    <div class="mdl-layout-spacer"></div>
+                    <!-- Navigation. We hide it in small screens. -->
+                    <nav class="mdl-navigation mdl-layout--large-screen-only">
+                        <a class="mdl-navigation__link" href="">Link</a>
+                        <a class="mdl-navigation__link" href="">Link</a>
+                        <a class="mdl-navigation__link" href="">Link</a>
+                        <a class="mdl-navigation__link" href="">Link</a>
+                        <a id="demo-menu-lower-right" class="mdl-navigation__link" href="#">John Doe</a>
+                        <ul class="mdl-menu mdl-menu--bottom-right mdl-js-menu mdl-js-ripple-effect"
+                            for="demo-menu-lower-right">
+                            <li class="mdl-menu__item">Paramètres</li>
+                            <li class="mdl-menu__item">Se déconnecter</li>
+                        </ul>
+                    </nav>
+                </div>
+            </header>
+            <div class="mdl-layout__drawer">
+                <span class="mdl-layout-title">Mon profil</span>
+                <nav class="mdl-navigation">
+                    <a class="mdl-navigation__link" href="">Évènements</a>
+                    <a class="mdl-navigation__link" href="">Mes groupes</a>
+                    <a class="mdl-navigation__link" href="">Blablabla</a>
+                    <a class="mdl-navigation__link" href="">Paramètres</a>
+                </nav>
+            </div>
+            <main class="mdl-layout__content">
+                <div class="page-content">
+                    <div class="mdl-grid">
+                        <div class="mdl-cell mdl-cell--4-col">
+                            <h4>Evènements</h4>
+                            <ul class="list-unstyled">
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                                <li>Event<hr/></li>
+                            </ul>
+                        </div>
+                        <div class="mdl-cell mdl-cell--8-col">
+                            <div id="map"></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <script type="text/javascript">
+
+            var map;
+
+            function initMap() {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    options: {
+                        center: {lat: 46.227638, lng: 2.213749},
+                        zoom: 6,
+                        mapTypeId: google.maps.MapTypeId.ROADMAP,
+                        mapTypeControlOptions: {
+                            style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
+                        }
+                    }
+                });
+            }
+
+            var options = {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            };
+
+            function success(pos) {
+                var crd = pos.coords;
+
+                console.log('Your current position is:');
+                console.log('Latitude : ' + crd.latitude);
+                console.log('Longitude: ' + crd.longitude);
+                console.log('More or less ' + crd.accuracy + ' meters.');
+            }
+
+            function error(err) {
+                console.warn('ERROR(' + err.code + '): ' + err.message);
+            }
+
+            navigator.geolocation.getCurrentPosition(success, error, options);
+
+        </script>
+        <script async defer
+                src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAGAO0qJ_6LswcvX5xhZDPfE8u2CPJSh9w&callback=initMap">
+        </script>
+    </body>
+</html>
