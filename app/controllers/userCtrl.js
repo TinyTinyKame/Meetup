@@ -109,7 +109,7 @@ module.exports.createUser = function (req, res) {
 };
 
 module.exports.updateUser = function (req, res) {
-    var auth = req.token;
+    var auth = jwt.decode(req.token);
     var updated_user = {
 	name: req.body.name,
 	email: req.body.email,
@@ -129,6 +129,34 @@ module.exports.updateUser = function (req, res) {
     });
 };
 
+module.exports.setLocation = function (req, res) {
+    if (!req.body.latitude) {
+	return res.status(400).json('No latitude');
+    }
+    if (!req.body.longitude) {
+	return res.status(400).json('No longitude');
+    }
+    var auth    = jwt.decode(req.token);
+    var promise = User.findOne({_id: auth._id}).exec();
+    promise.addErrback(function (err) {
+	if (err) {
+	    return res.status(404).json('User not found');
+	}
+    });
+    promise.then(function (user) {
+	user.latitude  = req.body.latitude;
+	user.longitude = req.body.longitude;
+	user.save(function (err, saved) {
+	    if (err) {
+		return res.status(400).json('Error saving user');
+	    }
+	    if (saved) {
+		return res.status(201).json(saved);
+	    }
+	});
+    });
+};
+
 module.exports.addItinerary = function (req, res) {
     var user     = req.user;
     var location = req.location;
@@ -137,24 +165,32 @@ module.exports.addItinerary = function (req, res) {
 	detail: req.body.detail,
 	travelMode: req.body.travelMode
     };
-    user.itineraries.push(params);
-    user.save(function (err, user) {
+    var promise  = User.findOne({_id: user._id}).exec();
+    promise.addErrback(function (err) {
 	if (err) {
-	    return res.status(400).json(err);
+	    return res.status(404).json('User not found');
 	}
-	if (user) {
-	    User.populate(
-		user,
-		{path: 'friends itineraries'},
-		function (err, user) {
-		    if (err) {
-			return res.status(400).json(err);
+    });
+    promise.then(function (user) {
+	user.itineraries.push(params);
+	user.save(function (err, user) {
+	    if (err) {
+		return res.status(400).json(err);
+	    }
+	    if (user) {
+		User.populate(
+		    user,
+		    {path: 'friends itineraries'},
+		    function (err, user) {
+			if (err) {
+			    return res.status(400).json(err);
+			}
+			if (user) {
+			    return res.status(201).json(user);
+			}
 		    }
-		    if (user) {
-			return res.status(201).json(user);
-		    }
-		}
-	    );
-	}
+		);
+	    }
+	});
     });
 };

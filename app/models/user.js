@@ -10,6 +10,8 @@ var userSchema = mongoose.Schema({
     permission: {type: String, enum:['terminator', 'user'], required: true, default: 'user'},
     description: String,
     photoUrl: String,
+    latitude: Number,
+    longitude: Number,
     friends: [
 	{
 	    user: {type: mongoose.Schema.ObjectId, ref: 'User'},

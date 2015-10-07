@@ -25,7 +25,8 @@ var eventSchema = mongoose.Schema({
     users: [
 	{
 	    user: {type: mongoose.Schema.ObjectId, ref: 'User'},
-	    mute: {type: Boolean, default: false}
+	    mute: {type: Boolean, default: false},
+	    status: {type: String, enum:["Denied", "Pending", "Accepted"], default: "Accepted"}
 	}
     ],
     messages: [{type: mongoose.Schema.ObjectId, ref: 'Message'}]

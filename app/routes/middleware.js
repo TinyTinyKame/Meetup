@@ -6,12 +6,12 @@ var Message  = require('../models/message');
 module.exports = function (app) {
     app.param('user_id', function (req, res, next, user_id) {
 	User.findById(user_id, function (err, user) {
-            if (err) {
+	    if (err) {
                 return next(err);
-            }
-            if (!user) {
+	    }
+	    if (!user) {
                 return next(new Error('No user found'));
-            }
+	    }
 	    User.populate(user, {path: 'friends itineraries.location'}, function (err, user) {
 		if (err) {
 		    return next(err);
@@ -58,7 +58,7 @@ module.exports = function (app) {
 	});
     });
     app.param('friend_id', function (req, res, next, friend_id) {
-	User.findById(user_id, function(err, friend) {
+	User.findById(friend_id, function(err, friend) {
             if (err) {
                 return next(err);
             }

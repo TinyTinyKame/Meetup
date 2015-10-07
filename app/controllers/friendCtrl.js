@@ -66,12 +66,7 @@ module.exports.friendRequest = function (req, res) {
 		    var message = new gcm.Message();
 		    var regIds  = [friend.gcmToken];
 		    var sender  = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-		    message.addData('friendRequest', user.name + 'added you!');
-		    message.addNotification({
-			title: 'Friend request',
-			icon: 'ic_launcher',
-			body: 'Hey there!, ' + user.name + ' added you!'
-		    });
+		    message.addData({user: user});
 		    sender.send(message, { registrationIds: regIds }, function (err, result) {
 			if (err) {
 			    console.error(err);
@@ -96,17 +91,27 @@ module.exports.confirmFriend = function (req, res) {
         }
     });
     promise.then(function (user) {
+	friend_to_add.friends.forEach(function (user, index) {
+	    if (user.user.equals(auth._id)) {
+		friend_to_add.friends[index].status = 'Accepted';
+		friend_to_add.save(function(err) {
+		    if (err) {
+			return res.status(400).json('Error while saving friend');
+		    }
+		});
+	    }
+	});
 	user.friends.forEach(function (friend, index) {
-	    if (friend.user._id.equals(friend_to_add._id)) {
+	    if (friend.user.equals(friend_to_add._id)) {
 		user.friends[index].status = 'Accepted';
 		user.save(function (err, user) {
 		    if (err) {
 			return res.status(400).json('Error while accepting friend');
 		    }
 		    if (user) {
-			User.populate(user, {$path: 'friends'}, function (err, user) {
+			User.populate(user, {path: 'friends.user', model: 'User'}, function (err, user) {
 			    if (err) {
-				return res.status(400).json('Error while populating user');
+				return res.status(400).json('Error populating user');
 			    }
 			    if (user) {
 				return res.status(201).json(user);

@@ -80,12 +80,7 @@ module.exports.createMessageForEvent = function (req, res) {
 					    }
 					});
 					var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-					message.addData('newMessage in ' + event.name + ' !');
-					message.addNotification({
-					    title: 'New message',
-					    icon: 'ic_launcher',
-					    body: 'Hey there!, there\'s some people talking in' + event.name
-					});
+					message.addData({event: event});
 					sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
 					    if (err) {
 						console.error(err);

@@ -2,6 +2,7 @@ var Event    = require('../models/event');
 var User     = require('../models/user');
 var Location = require('../models/location');
 var jwt      = require('jsonwebtoken');
+var gcm      = require('node-gcm');
 
 var EventRepository    = require('../repositories/event');
 var LocationRepository = require('../repositories/location');
@@ -105,7 +106,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
 		if (event) {
 		    event.users.push({
 			user: auth._id,
-			writing: true
+			status: "Accepted"
 		    });
 		    event.save(function (err, event) {
 			if (err) {
@@ -114,7 +115,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
 		    }).then(function (event) {
 			Event.populate(
 			    event,
-			    {path: 'admin users.user locations messages messages.author'},
+			    {path: 'admin users.user locations messages'},
 			    function (err, event) {
 				if (err) {
 				    return res.status(400).json(err);
@@ -148,13 +149,13 @@ module.exports.deleteEvent = function (req, res) {
     }
 };
 
-module.exports.addUser = function (req, res) {
-    var event        = req.event;
-    var user_to_add  = req.user;
-    var found        = false;
-
+module.exports.inviteUser = function (req, res) {
+    var event          = req.event;
+    var user_to_invite = req.user;
+    var found          = false;
+    
     event.users.forEach(function (user) {
-	if (user.user._id.equals(user_to_add._id)) {
+	if (user.user._id.equals(user_to_invite._id)) {
 	    found = true;
 	    return res.status(409).json('User already in event');
 	}
@@ -162,7 +163,63 @@ module.exports.addUser = function (req, res) {
 
     if (!found) {
 	event.users.push({
-	    user: user_to_add._id
+	    user: user_to_invite._id,
+	    status: 'Pending'
+	});
+	event.save(function (err, event) {
+	    if (err) {
+		return res.status(400).json(err);
+	    }
+	    Event.populate(
+                event,
+                {path: 'users.user'},
+                function (err, event) {
+                    if (err) {
+                        return res.status(400).json(err);
+                    }
+                    if (event) {
+			var message   = new gcm.Message();
+                        var gcmTokens = [user_to_invite.gcmToken];
+                        var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+                        message.addData({event: event});
+                        sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
+                            if (err) {
+                                console.error(err);
+                            } else {
+                                console.log(result);
+                            }
+                        });
+                        return res.status(201).json(event);
+                    }
+                }
+            );
+        });
+    }
+};
+
+module.exports.addUser = function (req, res) {
+    var event        = req.event;
+    var user_to_add  = req.user;
+    var found        = false;
+
+    event.users.forEach(function (user, index) {
+	if (user.user._id.equals(user_to_add._id)) {
+	    found = true;
+	    event.users[index].status = "Accepted";
+	    event.save(function (err, event) {
+		if (err) {
+		    return res.status(400).json('Error saving accepted status');
+		}
+		if (event) {
+		    return res.status(201).json(event);
+		}
+	    });
+	}
+    });
+
+    if (!found) {
+	event.users.push({
+	    user: user_to_add._id	    
 	});
 	event.save(function (err, event) {
 	    if (err) {
