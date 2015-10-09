@@ -1,7 +1,8 @@
-var User   = require('../models/user.js');
-var bcrypt = require('bcrypt');
-var jwt    = require('jsonwebtoken');
-var config = require('../config');
+var User     = require('../models/user');
+var Location = require('../models/location');
+var bcrypt   = require('bcrypt');
+var jwt      = require('jsonwebtoken');
+var config   = require('../config');
 
 var UserRepository     = require('../repositories/user');
 var LocationRepository = require('../repositories/location');
@@ -192,5 +193,21 @@ module.exports.addItinerary = function (req, res) {
 		);
 	    }
 	});
+    });
+};
+
+module.exports.getUserHistoryLocations = function (req, res) {
+    var user = req.user;
+    Location.find({
+	creator: user._id
+    }, function (err, locations) {
+	if (err) {
+	    return res.status(400).json('Error finding user locations');
+	}
+	if (!locations) {
+	    return res.status(404).json('User has not created any location');
+	} else {
+	    return res.status(200).json(locations);
+	}
     });
 };

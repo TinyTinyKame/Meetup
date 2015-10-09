@@ -12,7 +12,7 @@ module.exports = function (app) {
 	    if (!user) {
                 return next(new Error('No user found'));
 	    }
-	    User.populate(user, {path: 'friends itineraries.location'}, function (err, user) {
+	    User.populate(user, {path: 'friends.user itineraries.location'}, function (err, user) {
 		if (err) {
 		    return next(err);
 		}

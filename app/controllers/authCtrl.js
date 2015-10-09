@@ -32,7 +32,7 @@ module.exports.login = function (req, res) {
 		    gcmToken: user.gcmToken,
 		    permission: user.permission
 		}
-		var token = jwt.sign(data, config.secret, { expiresInMinutes: 1440 }); //token for 24 hours to change?
+		var token = jwt.sign(data, config.secret);
 		return res.status(200).json({
                     loggedAs: user,
                     auth: token

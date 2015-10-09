@@ -7,28 +7,10 @@ var FriendRepository = require('../repositories/friend');
 
 module.exports.getFriends = function (req, res) {
     var user = req.user;
-    var page = 0;
-    if (req.query.p) {
-	page = req.query.p * 10;
-    }
     if (user.friends.length <= 0) {
 	return res.status(200).json('User has no friends');
     }
-    var friends = [];
-    user.friends.forEach(function (friend) {
-	friends.push(friend.user);
-    });
-    FriendRepository.find(friends, page, function (err, friends) {
-	if (err) {
-	    return res.status(400).json(err);
-	}
-	console.log(friends);
-	if (friends) {
-	    return res.status(200).json(friends);
-	} else {
-	    return res.status(404).json('No friends found');
-	}
-    });
+    return res.status(200).json(user.friends);
 };
 
 module.exports.friendRequest = function (req, res) {

@@ -10,5 +10,6 @@ module.exports = function (app) {
     app.put('/setLocation', user.setLocation);
     app.get('/user/:user_id', user.getUser);
     app.delete('/user/:user_id', user.removeUser);
+    app.get('/user/:user_id/getHistory', user.getUserHistoryLocations);
     app.post('/user/:user_id/location/:location_id/itinerary', user.addItinerary);
 };

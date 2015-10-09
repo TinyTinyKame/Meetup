@@ -76,7 +76,8 @@ module.exports.createOrUpdateEvent = function (req, res) {
 	place: req.body.place,
         address: req.body.address,
         longitude: req.body.longitude,
-        latitude: req.body.latitude
+        latitude: req.body.latitude,
+	creator: auth._id
     };
     LocationRepository.findOrCreateLocation(params, function (err, location) {
 	if (err) {

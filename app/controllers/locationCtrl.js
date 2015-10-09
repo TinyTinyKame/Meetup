@@ -1,4 +1,5 @@
 var Location = require('../models/location');
+var jwt      = require('jsonwebtoken');
 
 var LocationRepository = require('../repositories/location');
 
@@ -27,11 +28,13 @@ module.exports.getLocations = function (req, res) {
 };
 
 module.exports.addOrUpdateLocation = function(req, res) {
+    var auth = jwt.verify(req.token);
     var params = {
 	place: req.body.place,
 	address: req.body.address,
 	longitude: req.body.longitude,
-	latitude: req.body.latitude
+	latitude: req.body.latitude,
+	creator: auth._id
     };
     LocationRepository.findOrCreateLocation(params, function (err, location) {
 	if (err) {
