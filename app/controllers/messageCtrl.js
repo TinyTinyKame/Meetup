@@ -76,11 +76,11 @@ module.exports.createMessageForEvent = function (req, res) {
 					var gcmTokens = [];
 					event.users.forEach(function (user) {
 					    if (!user.user._id.equals(auth._id)) {
-						gcmTokens.push(user.user.gcmToken);
+						gcmTokens = gcmTokens.concat(user.user.gcmToken);
 					    }
 					});
 					var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-					message.addData({event: event});
+					message.addData({eventMessages: event});
 					sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
 					    if (err) {
 						console.error(err);

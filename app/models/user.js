@@ -6,7 +6,7 @@ var userSchema = mongoose.Schema({
     name: {type: String, required: true},
     email: {type: String, required: true},
     password: {type: String, required: true},
-    gcmToken: {type: String, required: true},
+    gcmToken: [{type: String, required: true}],
     permission: {type: String, enum:['terminator', 'user'], required: true, default: 'user'},
     description: String,
     photoUrl: String,

@@ -43,11 +43,13 @@ module.exports.getUserEvents = function (req, res) {
 	    return res.status(400).json(err);
 	}
         if (events) {
-	    return res.status(200).json(events);
+	    Event.populate(events, { path: 'messages.author', model: 'User' }, function (err, events) {
+		return res.status(200).json(events);
+	    });
 	} else {
 	    return res.status(404).json('User ' + req.user._id + ' is in no events');
 	}
-    }).skip(page).limit(limit).populate('admin users.user messages locations messages.author').exec();
+    }).sort('-created_at').skip(page).limit(limit).populate('admin users.user messages locations messages.author').exec();
 };
 
 module.exports.getEventUsers = function(req, res) {
@@ -180,9 +182,9 @@ module.exports.inviteUser = function (req, res) {
                     }
                     if (event) {
 			var message   = new gcm.Message();
-                        var gcmTokens = [user_to_invite.gcmToken];
+                        var gcmTokens = user_to_invite.gcmToken;
                         var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-                        message.addData({event: event});
+                        message.addData({eventInvites: event});
                         sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
                             if (err) {
                                 console.error(err);

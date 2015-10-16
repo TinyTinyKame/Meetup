@@ -98,7 +98,7 @@ module.exports.createUser = function (req, res) {
 			gcmToken: user.gcmToken,
 			permission: user.permission
                     }
-		    var token = jwt.sign(data, config.secret, { expiresInMinutes: 1440 });
+		    var token = jwt.sign(data, config.secret);
 		    return res.status(201).json({
 			loggedAs: user,
 			auth: token
@@ -130,7 +130,7 @@ module.exports.updateUser = function (req, res) {
     });
 };
 
-module.exports.setLocation = function (req, res) {
+module.exports.setUserLocation = function (req, res) {
     if (!req.body.latitude) {
 	return res.status(400).json('No latitude');
     }
@@ -209,5 +209,51 @@ module.exports.getUserHistoryLocations = function (req, res) {
 	} else {
 	    return res.status(200).json(locations);
 	}
+    });
+};
+
+module.exports.removeGCMToken = function (req, res) {
+    var auth    = jwt.decode(req.token);
+    var promise = User.findOneAndUpdate(
+	{ _id: auth._id },
+	{ $pull: {gcmToken: req.body.gcmToken}},
+	{ new: true }
+    ).exec();
+
+    promise.addErrback(function (err) {
+	if (err) {
+	    return res.status(400).json('Error fetching user');
+	}
+    });
+    
+    promise.then(function (user) {
+	if (!user) {
+	    return res.status(404).json('User not found');
+	} else {
+	    return res.status(201).json(user);
+	}
+    });
+};
+
+module.exports.addGCMToken = function (req, res) {
+    var auth    = jwt.decode(req.token);
+    var promise = User.findOneAndUpdate(
+        { _id: auth._id },
+        { $push: {gcmToken: req.body.gcmToken}},
+        { new: true }
+    ).exec();
+
+    promise.addErrback(function (err) {
+        if (err) {
+            return res.status(400).json('Error fetching user');
+        }
+    });
+
+    promise.then(function (user) {
+        if (!user) {
+            return res.status(404).json('User not found');
+        } else {
+            return res.status(201).json(user);
+        }
     });
 };

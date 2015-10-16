@@ -27,7 +27,8 @@ module.exports.friendRequest = function (req, res) {
     promise.then(function (user) {
 	var found = false;
 	user.friends.forEach(function (friend_comp) {
-	    if (friend_comp.equals(friend._id)) {
+	    console.log(friend_comp);
+	    if (friend_comp.user.equals(friend._id)) {
 		found = true;
 		return res.status(409).json('Already in friend list');
 	    }
