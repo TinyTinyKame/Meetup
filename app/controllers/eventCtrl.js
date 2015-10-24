@@ -43,8 +43,15 @@ module.exports.getUserEvents = function (req, res) {
 	    return res.status(400).json(err);
 	}
         if (events) {
-	    Event.populate(events, { path: 'messages.author', model: 'User' }, function (err, events) {
-		return res.status(200).json(events);
+	    Event.populate(events, { path: 'messages.author', model: 'User' }, function (err, events_pop) {
+		if (err) {
+		    return res.status(400).json('Error populating messages author');
+		}
+		if (events_pop) {
+		    return res.status(200).json(events_pop);
+		} else {
+		    return res.status(404).json(events_pop);
+		}
 	    });
 	} else {
 	    return res.status(404).json('User ' + req.user._id + ' is in no events');
@@ -60,7 +67,11 @@ module.exports.getEventUsers = function(req, res) {
         page  = req.query.p * 10;
         limit = 10;
     }
-    UserRepository.search(page, {_id: {$in: event.users.user}}, limit, function (err, users) {
+    var users = [];
+    event.users.forEach(function (user) {
+	users.push(user.user);
+    });
+    UserRepository.search(page, {_id: {$in: users}}, limit, function (err, users) {
 	if (err) {
 	    return res.status(400).json(err);
 	}
@@ -242,4 +253,21 @@ module.exports.addUser = function (req, res) {
 	    );
 	});
     }
+};
+
+module.exports.denyInvite = function (req, res) {
+    var event     = req.event;
+    var deny_user = req.user;
+    var promise   = Event.findOneAndUpdate({_id: event._id}, {$pull: {users: {user: deny_user._id}}}, {new: true}).exec();
+
+    promise.addErrback(function (err) {
+	if (err) {
+	    return res.status(400).json('Error while removing event');
+	}
+    });
+
+    promise.then(function (event) {
+	console.log(event.users);
+	return res.status(200).json(event);
+    });
 };

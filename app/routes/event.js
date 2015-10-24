@@ -8,4 +8,5 @@ module.exports = function (app) {
     app.delete('/event/:event_id', event.deleteEvent);
     app.put('/event/:event_id/user/:user_id/invite', event.inviteUser);
     app.put('/event/:event_id/user/:user_id/add', event.addUser);
+    app.delete('/event/:event_id/user/:user_id/deny', event.denyInvite);
 };

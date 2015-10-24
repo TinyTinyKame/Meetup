@@ -2,6 +2,8 @@ var User   = require('../models/user.js');
 var bcrypt = require('bcrypt');
 var jwt    = require('jsonwebtoken');
 var config = require('../config');
+var crypto = require('crypto');
+var buffer = require('buffer');
 
 module.exports.unless = function (path, middleware) {
     return function(req, res, next) {
@@ -15,6 +17,18 @@ module.exports.unless = function (path, middleware) {
 
 module.exports.login = function (req, res) {
     var promise = User.findOne({email: req.body.email}).exec();
+    var social  = '';
+    if (req.body.social && req.body.social != '') {
+        var decipher = crypto.createDecipher('aes-128-ecb', config.secret);
+        chunks = []
+        chunks.push( decipher.update( new Buffer(req.body.social, 'base64').toString('binary')) );
+        chunks.push( decipher.final('binary') );
+        var txt = chunks.join('');
+        social = new Buffer(txt, 'binary').toString('utf-8');
+	regex  = new RegExp(config.secret, 'g');
+	social = social.replace(regex, '');
+	social = social.split(':');
+    }
     promise.addErrback(function (err) {
 	if (err) {
 	    return res.status(400).json('Something went wrong with login!');
@@ -24,21 +38,22 @@ module.exports.login = function (req, res) {
 	if (!user) {
 	    return res.status(404).json('User not found');
 	} else {
-	    if (bcrypt.compareSync('!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password, user.password)) {
-		var data = {
-		    _id: user._id,
-		    name: user.name,
-		    email: user.email,
-		    gcmToken: user.gcmToken,
-		    permission: user.permission
-		}
+	    var data = {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                gcmToken: user.gcmToken,
+                permission: user.permission
+            }
+	    
+	    if (social != '' || bcrypt.compareSync('!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password, user.password)) {
 		var token = jwt.sign(data, config.secret);
 		return res.status(200).json({
                     loggedAs: user,
                     auth: token
 		});
             } else {
-		return res.status(403).json('Wrong password');
+		return res.status(403).json('Error login');
             }
 	}
     });

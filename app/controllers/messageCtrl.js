@@ -72,23 +72,31 @@ module.exports.createMessageForEvent = function (req, res) {
 					return res.status(400).json('Error populating event');
 				    }
 				    if (event) {
-					var message   = new gcm.Message();
-					var gcmTokens = [];
-					event.users.forEach(function (user) {
-					    if (!user.user._id.equals(auth._id)) {
-						gcmTokens = gcmTokens.concat(user.user.gcmToken);
-					    }
-					});
-					var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-					message.addData({eventMessages: event});
-					sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
+					Event.populate(event, { path: 'messages.author', model: 'User' }, function (err, data) {
 					    if (err) {
-						console.error(err);
-					    } else {
-						console.log(result);
+						return res.status(400).json('Error populating author');
+					    }
+					    if (data) {
+						var notif   = new gcm.Message();
+						var gcmTokens = [];
+						data.users.forEach(function (user) {
+						    if (!user.user._id.equals(auth._id)) {
+							gcmTokens = gcmTokens.concat(user.user.gcmToken);
+						    }
+						});
+						var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+						notif.addData({event: data._id, last_message: data.messages.pop()});
+						console.log(gcmTokens);
+						sender.send(notif, { registrationIds: gcmTokens }, function (err, result) {
+						    if (err) {
+							console.error(err);
+						    } else {
+							console.log(result);
+						    }
+						});
+						return res.status(201).json(data);
 					    }
 					});
-					return res.status(201).json(event);
 				    }
 				}
 			    );

@@ -5,7 +5,7 @@ var mongoose = require('mongoose');
 var userSchema = mongoose.Schema({
     name: {type: String, required: true},
     email: {type: String, required: true},
-    password: {type: String, required: true},
+    password: String,
     gcmToken: [{type: String, required: true}],
     permission: {type: String, enum:['terminator', 'user'], required: true, default: 'user'},
     description: String,
@@ -15,7 +15,7 @@ var userSchema = mongoose.Schema({
     friends: [
 	{
 	    user: {type: mongoose.Schema.ObjectId, ref: 'User'},
-	    status: {type: String, enum:['Pending', 'Denied', 'Accepted'], require: true}
+	    status: {type: String, enum:['Pending', 'Denied', 'Asking', 'Accepted'], require: true}
 	}
     ],
     itineraries: [

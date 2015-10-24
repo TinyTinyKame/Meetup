@@ -3,6 +3,8 @@ var Location = require('../models/location');
 var bcrypt   = require('bcrypt');
 var jwt      = require('jsonwebtoken');
 var config   = require('../config');
+var crypto   = require('crypto');
+var buffer   = require('buffer');
 
 var UserRepository     = require('../repositories/user');
 var LocationRepository = require('../repositories/location');
@@ -55,58 +57,77 @@ module.exports.removeUser = function (req, res) {
 
 var setParamsForUser = function (req) {
     var pass   = '';
-    if (req.body.password) {
-        var salt = bcrypt.genSaltSync(12);
-        pass     = '!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password;
-        pass     = bcrypt.hashSync(pass, salt);
-    } else {
-	return 'No password sent';
-    }
     var user = {
         name : req.body.name,
-        password : pass,
         email : req.body.email,
         gcmToken: req.body.gcmToken,
         photoUrl: req.body.photoUrl,
-	description: req.body.description
+        description: req.body.description
     };
+    console.log(req.body);
+    if (req.body.social) {
+	var decipher = crypto.createDecipher('aes-128-ecb', config.secret);	
+	chunks = []
+	chunks.push( decipher.update( new Buffer(req.body.social, "base64").toString("binary")) );
+	chunks.push( decipher.final('binary') );
+	var txt = chunks.join("");
+	social  = new Buffer(txt, "binary").toString("utf-8");
+	social  = new Buffer(txt, 'binary').toString('utf-8');
+	regex   = new RegExp(config.secret, 'g');
+        social  = social.replace(regex, '');
+        social  = social.split(':');
+	if (social[0] !== 'SUCCESS') {
+	    return 'Error with social login';
+        }
+    } else if (req.body.password) {
+        var salt = bcrypt.genSaltSync(12);
+        pass     = '!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password;
+        pass     = bcrypt.hashSync(pass, salt);
+	user.password = pass;
+    } else {
+	return 'No password';
+    }
     return user;
 };
 
 module.exports.createUser = function (req, res) {
     var new_user = setParamsForUser(req);
     var promise  = User.findOne({email: req.body.email}).exec();
-
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(400).json(err);
-	}
-    });
-    promise.then(function (user) {
-	if (user) {
-	    return res.status(409).json('Email already exists');
-	} else {
-	    UserRepository.create(new_user, function (err, user) {
-		if (err) {
-		    return res.status(400).json(err);
-		}
-		if (user) {
-		    var data = {
-			_id: user._id,
-			name: user.name,
-			email: user.email,
-			gcmToken: user.gcmToken,
-			permission: user.permission
-                    }
-		    var token = jwt.sign(data, config.secret);
-		    return res.status(201).json({
-			loggedAs: user,
-			auth: token
-		    });
-		}
-	    });
-	}
-    });
+    
+    if (typeof new_user == 'string') {
+	return res.status(400).json(new_user);
+    } else {
+	promise.addErrback(function (err) {
+	    if (err) {
+		return res.status(400).json(err);
+	    }
+	});
+	promise.then(function (user) {
+	    if (user) {
+		return res.status(409).json('Email already exists');
+	    } else {
+		UserRepository.create(new_user, function (err, user) {
+		    if (err) {
+			return res.status(400).json(err);
+		    }
+		    if (user) {
+			var data = {
+			    _id: user._id,
+			    name: user.name,
+			    email: user.email,
+			    gcmToken: user.gcmToken,
+			    permission: user.permission
+			}
+			var token = jwt.sign(data, config.secret);
+			return res.status(201).json({
+			    loggedAs: user,
+			    auth: token
+			});
+		    }
+		});
+	    }
+	});
+    }
 };
 
 module.exports.updateUser = function (req, res) {

@@ -27,14 +27,13 @@ module.exports.friendRequest = function (req, res) {
     promise.then(function (user) {
 	var found = false;
 	user.friends.forEach(function (friend_comp) {
-	    console.log(friend_comp);
 	    if (friend_comp.user.equals(friend._id)) {
 		found = true;
 		return res.status(409).json('Already in friend list');
 	    }
 	});
 	if (!found) {
-	    friend.friends.push({user: user._id, status: 'Pending'});
+	    friend.friends.push({user: user._id, status: 'Asking'});
 	    friend.save(function (err) {
 		if (err) {
 		    return res.status(400).json(err);
@@ -47,7 +46,7 @@ module.exports.friendRequest = function (req, res) {
 		    }
 		}).then(function (user) {
 		    var message = new gcm.Message();
-		    var regIds  = [friend.gcmToken];
+		    var regIds  = friend.gcmToken;
 		    var sender  = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
 		    message.addData({user: user});
 		    sender.send(message, { registrationIds: regIds }, function (err, result) {
