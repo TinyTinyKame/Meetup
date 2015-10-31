@@ -1,5 +1,6 @@
 var User     = require('../models/user');
 var Location = require('../models/location');
+var Event    = require('../models/event');
 var bcrypt   = require('bcrypt');
 var jwt      = require('jsonwebtoken');
 var config   = require('../config');
@@ -22,7 +23,8 @@ module.exports.getUsers = function (req, res) {
     }
     UserRepository.search(page, {name: query}, limit, function (err, users) {
 	if (err) {
-	    return res.status(400).json(err);
+	    console.error(err);
+	    return res.status(400).json('Error while searching');
 	}
 	if (users) {
 	    return res.status(200).json(users);
@@ -40,9 +42,10 @@ module.exports.removeUser = function (req, res) {
     var user = req.user;
     var auth = jwt.decode(req.token);
     if (auth.permission === 'terminator') {
-	UserRepository.remove(params, function (err, user) {
+	UserRepository.remove({ _id: user._id }, function (err, user) {
 	    if (err) {
-                return res.status(404).json(err);
+		console.error(err);
+                return res.status(400).json('Error while deleting user');
 	    }
 	    if (user) {
                 return res.status(200).json(user);
@@ -64,7 +67,6 @@ var setParamsForUser = function (req) {
         photoUrl: req.body.photoUrl,
         description: req.body.description
     };
-    console.log(req.body);
     if (req.body.social) {
 	var decipher = crypto.createDecipher('aes-128-ecb', config.secret);	
 	chunks = []
@@ -97,35 +99,35 @@ module.exports.createUser = function (req, res) {
     if (typeof new_user == 'string') {
 	return res.status(400).json(new_user);
     } else {
-	promise.addErrback(function (err) {
-	    if (err) {
-		return res.status(400).json(err);
-	    }
-	});
 	promise.then(function (user) {
 	    if (user) {
 		return res.status(409).json('Email already exists');
 	    } else {
-		UserRepository.create(new_user, function (err, user) {
-		    if (err) {
-			return res.status(400).json(err);
-		    }
-		    if (user) {
-			var data = {
-			    _id: user._id,
-			    name: user.name,
-			    email: user.email,
-			    gcmToken: user.gcmToken,
-			    permission: user.permission
-			}
-			var token = jwt.sign(data, config.secret);
-			return res.status(201).json({
-			    loggedAs: user,
-			    auth: token
-			});
-		    }
-		});
+		return user;
 	    }
+	}).then(function (user) {
+	    UserRepository.create(new_user, function (err, user) {
+		if (err) {
+		    return res.status(400).json(err);
+		}
+		if (user) {
+		    var data = {
+			_id: user._id,
+			name: user.name,
+			email: user.email,
+			gcmToken: user.gcmToken,
+			permission: user.permission
+		    }
+		    var token = jwt.sign(data, config.secret);
+		    return res.status(201).json({
+			loggedAs: user,
+			auth: token
+		    });
+		}
+	    });
+	}).catch(function (err) {
+	    console.error(err);
+	    return res.status(err.status).json('Oops, something went wrong with createUser');
 	});
     }
 };
@@ -139,14 +141,17 @@ module.exports.updateUser = function (req, res) {
 	photoUrl: req.body.photoUrl,
 	description: req.body.description
     };
-    User.findOneAndUpdate({_id: auth._id}, updated_user, {new: true}, function (err, user) {
-	if (err) {
-	    return res.status(400).json('Something went wrong with updateUser');
-	}
+    var promise = User.findOneAndUpdate({_id: auth._id}, updated_user, {new: true}).exec();
+    promise.then(function (user) {
 	if (!user) {
 	    return res.status(404).json('User not found');
 	} else {
 	    return res.status(201).json(user);
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with updateUser');
 	}
     });
 };
@@ -160,22 +165,57 @@ module.exports.setUserLocation = function (req, res) {
     }
     var auth    = jwt.decode(req.token);
     var promise = User.findOne({_id: auth._id}).exec();
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(404).json('User not found');
-	}
-    });
     promise.then(function (user) {
-	user.latitude  = req.body.latitude;
-	user.longitude = req.body.longitude;
-	user.save(function (err, saved) {
-	    if (err) {
-		return res.status(400).json('Error saving user');
+	if (!user) {
+	    return res.status(404).json('No such user');
+	} else {
+	    user.latitude  = req.body.latitude;
+	    user.longitude = req.body.longitude;
+	    return user.save();
+	}
+    }).then(function (save) {
+	if (save) {
+	    return {
+		event: Event.find({'users.user': save._id}).populate('users').exec(),
+		user : save
+	    };
+	}
+    }).then(function (result) {
+	result.event.then(function (events) {
+	    var gcmTokens = [];
+	    if (events.length > 0) {
+		events.forEach(function (event) {
+		    event.users.forEach(function (user) {
+			if (!user.user.equals(result.user._id)) {
+			    gcmTokens = gcmTokens.concat(user.user.gcmToken);
+			}
+		    });
+		});
 	    }
-	    if (saved) {
-		return res.status(201).json(saved);
+	    if (gcmTokens.length > 0) {
+		var message   = new gcm.Message();
+		var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+		message.addData({newLocation: result.user});
+		sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
+                    if (err) {
+			console.error(err);
+                    } else {
+			console.log(result);
+                    }
+		});
+	    }
+	    return res.status(201).json(result.user);
+	}).catch(function (err) {
+	    if (err) {
+		console.error(err);
+		return res.status(400).json('Error searching for events');
 	    }
 	});
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with setLocation');
+	}
     });
 };
 
@@ -188,47 +228,37 @@ module.exports.addItinerary = function (req, res) {
 	travelMode: req.body.travelMode
     };
     var promise  = User.findOne({_id: user._id}).exec();
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(404).json('User not found');
-	}
-    });
     promise.then(function (user) {
 	user.itineraries.push(params);
-	user.save(function (err, user) {
-	    if (err) {
-		return res.status(400).json(err);
-	    }
-	    if (user) {
-		User.populate(
-		    user,
-		    {path: 'friends itineraries'},
-		    function (err, user) {
-			if (err) {
-			    return res.status(400).json(err);
-			}
-			if (user) {
-			    return res.status(201).json(user);
-			}
-		    }
-		);
-	    }
-	});
+	return user.save();
+    }).then(function (save) {
+	return User.populate(save, {path: 'friends itineraries'});
+    }).then(function (populated) {
+	if (populated) {
+	    return res.status(201).json(populated);
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Error while populating');
+	}
     });
 };
 
 module.exports.getUserHistoryLocations = function (req, res) {
-    var user = req.user;
-    Location.find({
-	creator: user._id
-    }, function (err, locations) {
-	if (err) {
-	    return res.status(400).json('Error finding user locations');
-	}
+    var user        = req.user;
+    var userHistory = Location.find({creator: user._id}).exec();
+
+    userHistory.then(function (locations) {
 	if (!locations) {
 	    return res.status(404).json('User has not created any location');
 	} else {
 	    return res.status(200).json(locations);
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Error finding user locations');
 	}
     });
 };
@@ -241,17 +271,16 @@ module.exports.removeGCMToken = function (req, res) {
 	{ new: true }
     ).exec();
 
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(400).json('Error fetching user');
-	}
-    });
-    
     promise.then(function (user) {
 	if (!user) {
 	    return res.status(404).json('User not found');
 	} else {
 	    return res.status(201).json(user);
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Error fetching user');
 	}
     });
 };
@@ -264,17 +293,16 @@ module.exports.addGCMToken = function (req, res) {
         { new: true }
     ).exec();
 
-    promise.addErrback(function (err) {
-        if (err) {
-            return res.status(400).json('Error fetching user');
-        }
-    });
-
     promise.then(function (user) {
         if (!user) {
             return res.status(404).json('User not found');
         } else {
             return res.status(201).json(user);
         }
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Error fetching user');
+	}
     });
 };

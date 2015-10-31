@@ -50,58 +50,42 @@ module.exports.createMessageForEvent = function (req, res) {
 	}
 	
 	if (create) {
-	    Message.create({
-		content: req.body.content,
-		author: auth._id
-	    },function (err, message) {
-		if (err) {
-		    return res.status(400).json('Error creating message');
-		}
+	    var pmessage = Message.create({ content: req.body.content, author: auth._id}).exec();
+	    pmessage.then(function (message) {
 		if (message) {
 		    event.messages.push(message);
-		    event.save(function (err, event) {
-			if (err) {
-			    return res.status(400).json('Error pushing message');
-			}
-			if (event) {
-			    Event.populate(
-				event,
-				{path: 'locations admin users.user messages messages.author'},
-				function (err, event) {
-				    if (err) {
-					return res.status(400).json('Error populating event');
-				    }
-				    if (event) {
-					Event.populate(event, { path: 'messages.author', model: 'User' }, function (err, data) {
-					    if (err) {
-						return res.status(400).json('Error populating author');
-					    }
-					    if (data) {
-						var notif   = new gcm.Message();
-						var gcmTokens = [];
-						data.users.forEach(function (user) {
-						    if (!user.user._id.equals(auth._id)) {
-							gcmTokens = gcmTokens.concat(user.user.gcmToken);
-						    }
-						});
-						var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-						notif.addData({event: data._id, last_message: data.messages.pop()});
-						console.log(gcmTokens);
-						sender.send(notif, { registrationIds: gcmTokens }, function (err, result) {
-						    if (err) {
-							console.error(err);
-						    } else {
-							console.log(result);
-						    }
-						});
-						return res.status(201).json(data);
-					    }
-					});
-				    }
-				}
-			    );
+		    return event.save();
+		}
+	    }).then(function (saved) {
+		if (saved) {
+		    return Event.populate(
+			saved,
+			{path: 'locations admin users.user messages messages.author'}
+		    );
+		}
+	    }).then(function (populated) {
+		if (populated) {
+		    return Event.populate(event, { path: 'messages.author', model: 'User' });
+		}
+	    }).then(function (data) {
+		if (data) {
+		    var notif   = new gcm.Message();
+		    var gcmTokens = [];
+		    data.users.forEach(function (user) {
+			if (!user.user._id.equals(auth._id)) {
+			    gcmTokens = gcmTokens.concat(user.user.gcmToken);
 			}
 		    });
+		    var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+		    notif.addData({event: data._id, last_message: data.messages.pop()});
+		    sender.send(notif, { registrationIds: gcmTokens }, function (err, result) {
+			if (err) {
+			    console.error(err);
+			} else {
+			    console.log(result);
+			}
+		    });
+		    return res.status(201).json(data);
 		}
 	    });
 	} else {

@@ -18,12 +18,6 @@ module.exports.friendRequest = function (req, res) {
     var friend  = req.friend;
     var promise = User.findOne({_id: auth._id}).exec();
     
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(400).json(err);
-	}
-    });
-
     promise.then(function (user) {
 	var found = false;
 	user.friends.forEach(function (friend_comp) {
@@ -34,31 +28,34 @@ module.exports.friendRequest = function (req, res) {
 	});
 	if (!found) {
 	    friend.friends.push({user: user._id, status: 'Asking'});
-	    friend.save(function (err) {
+	    return friend.save(function (err, saved) {
 		if (err) {
 		    return res.status(400).json(err);
+		} else {
+		    return user;
 		}
-	    }).then(function () {
-		user.friends.push({user: friend._id, status: 'Pending'});
-		user.save(function (err, user) {
-		    if (err) {
-			return res.status(400).json(err);
-		    }
-		}).then(function (user) {
-		    var message = new gcm.Message();
-		    var regIds  = friend.gcmToken;
-		    var sender  = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-		    message.addData({user: user});
-		    sender.send(message, { registrationIds: regIds }, function (err, result) {
-			if (err) {
-			    console.error(err);
-			} else {
-			    console.log(result);
-			}
-		    });
-		    return res.status(201).json(user);
-		});
 	    });
+	}
+    }).then(function (user) {
+	user.friends.push({user: friend._id, status: 'Pending'});
+	return user.save();
+    }).then(function (saved) {
+	var message = new gcm.Message();
+	var regIds  = friend.gcmToken;
+	var sender  = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+	message.addData({user: saved});
+	sender.send(message, { registrationIds: regIds }, function (err, result) {
+	    if (err) {
+		console.error(err);
+	    } else {
+		console.log(result);
+	    }
+	});
+	return res.status(201).json(saved);
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with friendRequest');
 	}
     });
 };
@@ -67,68 +64,64 @@ module.exports.confirmFriend = function (req, res) {
     var friend_to_add = req.friend;
     var auth          = jwt.decode(req.token);
     var promise       = User.findOne({_id: auth._id}).exec();
-    promise.addErrback(function (err) {
-        if (err) {
-            return res.status(400).json(err);
-        }
-    });
+
     promise.then(function (user) {
-	friend_to_add.friends.forEach(function (user, index) {
-	    if (user.user.equals(auth._id)) {
+	console.log(user);
+	console.log(friend_to_add);
+	friend_to_add.friends.forEach(function (friend, index) {
+	    if (friend.user.equals(user._id)) {
 		friend_to_add.friends[index].status = 'Accepted';
-		friend_to_add.save(function(err) {
-		    if (err) {
-			return res.status(400).json('Error while saving friend');
-		    }
-		});
+		return {
+		    friend: friend_to_add.save(), 
+		    user: user
+		};
 	    }
 	});
-	user.friends.forEach(function (friend, index) {
+    }).then(function (result) {
+	result.user.friends.forEach(function (friend, index) {
 	    if (friend.user.equals(friend_to_add._id)) {
-		user.friends[index].status = 'Accepted';
-		user.save(function (err, user) {
-		    if (err) {
-			return res.status(400).json('Error while accepting friend');
-		    }
-		    if (user) {
-			User.populate(user, {path: 'friends.user', model: 'User'}, function (err, user) {
-			    if (err) {
-				return res.status(400).json('Error populating user');
-			    }
-			    if (user) {
-				return res.status(201).json(user);
-			    }
-			});
-		    }
-		});
+		result.user.friends[index].status = 'Accepted';
+		return result.user.save();
 	    }
 	});
+    }).then(function (user) {
+	if (user) {
+	    return User.populate(user, {path: 'friends.user', model: 'User'});
+	}
+    }).then(function (populated) {
+	if (populated) {
+	    return res.status(201).json(populated);
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with confirmFriend');
+	}
     });
-}
+};
     
 module.exports.deleteFriend = function (req, res) {
     var friend  = req.friend;
     var auth    = jwt.decode(req.token);
     var promise = User.findOne({_id: auth._id}).exec();
-    promise.addErrback(function (err) {
+    promise.then(function (user) {
+	friend.friends.remove({user: user._id});
+	friend.save(function (err) {
+	    if (err) {
+		console.error(err);
+		return res.status(400).json('Oops, something went wrong');
+	    } else {
+		return user;
+	    }
+	});
+    }).then(function (user) {
+	user.friends.remove({user: friend._id});
+	return user.save();
+    }).then(function (saved) {
+	return res.status(200).json(saved);
+    }).catch(function (err) {
 	if (err) {
 	    return res.status(400).json(err);
 	}
-    });
-    promise.then(function (user) {
-	friend.friends.remove(user.user);
-	friend.save(function (err, friend) {
-	    if (err) {
-		return res.status(400).json(err);
-	    }
-	}).then(function (friend) {
-	    user.friends.remove(friend.user);
-	    user.save(function (err, user) {
-		if (err) {
-		    return res.status(400).json(err);
-		}
-		return res.status(200).json(user);
-	    });
-	});
     });
 };

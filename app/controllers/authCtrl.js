@@ -4,10 +4,11 @@ var jwt    = require('jsonwebtoken');
 var config = require('../config');
 var crypto = require('crypto');
 var buffer = require('buffer');
+var tools  = require('../tools');
 
-module.exports.unless = function (path, middleware) {
+module.exports.unless = function (paths, middleware) {
     return function(req, res, next) {
-        if (path === req.path && 'POST' === req.method) {
+        if (tools.inArray(req.path, paths) && 'POST' === req.method) {
 	    return next();
         } else {
 	    return middleware(req, res, next);
@@ -29,11 +30,6 @@ module.exports.login = function (req, res) {
 	social = social.replace(regex, '');
 	social = social.split(':');
     }
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(400).json('Something went wrong with login!');
-	}
-    });
     promise.then(function (user) {
 	if (!user) {
 	    return res.status(404).json('User not found');
@@ -55,6 +51,11 @@ module.exports.login = function (req, res) {
             } else {
 		return res.status(403).json('Error login');
             }
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with login!');
 	}
     });
 };

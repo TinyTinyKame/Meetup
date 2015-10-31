@@ -3,6 +3,7 @@ var User     = require('../models/user');
 var Location = require('../models/location');
 var jwt      = require('jsonwebtoken');
 var gcm      = require('node-gcm');
+var tools    = require('../tools');
 
 var EventRepository    = require('../repositories/event');
 var LocationRepository = require('../repositories/location');
@@ -38,25 +39,27 @@ module.exports.getUserEvents = function (req, res) {
         page  = req.query.p * 10;
         limit = 10;
     }
-    Event.find({'users.user': req.user._id}, function (err, events) {
-        if (err) {
-	    return res.status(400).json(err);
-	}
+    var pevents = Event
+	.find({ 'users.user': req.user._id})
+	.sort('-created_at')
+	.skip(page)
+	.limit(limit)
+	.populate('admin users.user messages locations messages.author')
+	.exec();
+    pevents.then(function (events) {
         if (events) {
-	    Event.populate(events, { path: 'messages.author', model: 'User' }, function (err, events_pop) {
-		if (err) {
-		    return res.status(400).json('Error populating messages author');
-		}
-		if (events_pop) {
-		    return res.status(200).json(events_pop);
-		} else {
-		    return res.status(404).json(events_pop);
-		}
-	    });
+	    return Event.populate(events, { path: 'messages.author', model: 'User' });
 	} else {
-	    return res.status(404).json('User ' + req.user._id + ' is in no events');
+	    return res.status(404).json('No events found');
 	}
-    }).sort('-created_at').skip(page).limit(limit).populate('admin users.user messages locations messages.author').exec();
+    }).then(function (events_pop) {
+	return res.status(200).json(events_pop);
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with getUserEvents');
+	}
+    });
 };
 
 module.exports.getEventUsers = function(req, res) {
@@ -92,58 +95,42 @@ module.exports.createOrUpdateEvent = function (req, res) {
         latitude: req.body.latitude,
 	creator: auth._id
     };
-    LocationRepository.findOrCreateLocation(params, function (err, location) {
+    var promise = Location.findOneAndUpdate(
+	params,
+	params,
+	{new: true, upsert: true}
+    ).exec();
+    promise.then(function (location) {
+	var query = {
+	    name: req.body.name,
+            type: req.body.type,
+            admin: auth._id
+	};
+	params = {
+	    name: req.body.name,
+            type: req.body.type,
+	    category: req.body.category,
+            locations: location._id,
+            date: new Date(req.body.date).getTime(),
+	    description: req.body.description,
+            admin: auth._id,
+	    users: [
+		{
+		    user: auth._id,
+		    status: 'Accepted'
+		}
+	    ]
+	};
+	return Event
+	    .findOneAndUpdate(query, params,{new: true, upsert: true})
+	    .populate('admin users.user locations messages')
+	    .exec();
+    }).then(function (event) {
+	return res.status(201).json(event);
+    }).catch(function (err) {
 	if (err) {
-	    return res.status(400).json(err);
-	}
-	if (!location) {
-	    return res.status(404).json('Location not found');
-	} else {
-	    var query = {
-		name: req.body.name,
-                type: req.body.type,
-                admin: auth._id
-	    };
-	    params = {
-		name: req.body.name,
-                type: req.body.type,
-		category: req.body.category,
-                locations: location._id,
-                date: new Date(req.body.date).getTime(),
-		description: req.body.description,
-                admin: auth._id
-	    };
-	    EventRepository.findOrCreateEvent(query, params, function(err, event) {
-		if (err) {
-		    return res.status(400).json(err);
-		}
-		if (event) {
-		    event.users.push({
-			user: auth._id,
-			status: "Accepted"
-		    });
-		    event.save(function (err, event) {
-			if (err) {
-			    return res.status(400).json(err);
-			}
-		    }).then(function (event) {
-			Event.populate(
-			    event,
-			    {path: 'admin users.user locations messages'},
-			    function (err, event) {
-				if (err) {
-				    return res.status(400).json(err);
-				}
-				if (event) {
-				    return res.status(201).json(event);
-				}
-			    }
-			);
-		    });
-		} else {
-		    return res.status(404).json('Event not found');
-		}
-	    });
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wront with createOrUpdateEvent');
 	}
     });
 };
@@ -163,51 +150,54 @@ module.exports.deleteEvent = function (req, res) {
     }
 };
 
-module.exports.inviteUser = function (req, res) {
-    var event          = req.event;
-    var user_to_invite = req.user;
-    var found          = false;
+module.exports.inviteUsers = function (req, res) {
+    var event           = req.event;
+    var users_to_invite = req.body.users;
+    var users           = [];
+    var gcmTokens       = [];
     
-    event.users.forEach(function (user) {
-	if (user.user._id.equals(user_to_invite._id)) {
-	    found = true;
-	    return res.status(409).json('User already in event');
-	}
-    });
-
-    if (!found) {
-	event.users.push({
-	    user: user_to_invite._id,
-	    status: 'Pending'
-	});
-	event.save(function (err, event) {
-	    if (err) {
-		return res.status(400).json(err);
+    if (users_to_invite.length > 0) {
+	event.users.forEach(function (user) {
+	    if (!tools.inArray(user.user._id, users_to_invite)) {
+		users.push(
+		    {
+			user: user.user._id,
+			status: 'Pending'
+		    }
+		);
+		gcmTokens = gcmTokens.concat(user.user.gcmToken);
 	    }
-	    Event.populate(
-                event,
-                {path: 'users.user'},
-                function (err, event) {
+	});
+	
+	if (users.length > 0) {
+	    event.users = event.users.concat(users);
+	    var promise = event.save();
+	    promise.then(function (event) {
+		return Event.populate(event, {path: 'users.user', model: 'User'});
+	    }).then(function (event_pop) {
+		var message   = new gcm.Message();
+		var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
+		var data      = event_pop;
+		delete data.messages;
+		delete data.users;
+		message.addData({eventInvites: data});
+		sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
                     if (err) {
-                        return res.status(400).json(err);
+			console.error(err);
+                    } else {
+			console.log(result);
                     }
-                    if (event) {
-			var message   = new gcm.Message();
-                        var gcmTokens = user_to_invite.gcmToken;
-                        var sender    = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
-                        message.addData({eventInvites: event});
-                        sender.send(message, { registrationIds: gcmTokens }, function (err, result) {
-                            if (err) {
-                                console.error(err);
-                            } else {
-                                console.log(result);
-                            }
-                        });
-                        return res.status(201).json(event);
-                    }
-                }
-            );
-        });
+		});
+		return res.status(201).json(event_pop);
+            }).catch(function (err) {
+		if (err) {
+		    console.error(err);
+		    return res.status(400).json('Oops, something went wrong with inviteUsers');
+		}
+            });
+	}
+    } else {
+	return res.status(200).json('No invites');
     }
 };
 
@@ -219,13 +209,15 @@ module.exports.addUser = function (req, res) {
     event.users.forEach(function (user, index) {
 	if (user.user._id.equals(user_to_add._id)) {
 	    found = true;
+	    console.log(event);
 	    event.users[index].status = "Accepted";
-	    event.save(function (err, event) {
+	    event.save().then(function (event) {
+		console.log("test");
+		return res.status(201).json(event);
+	    }).catch(function (err) {
 		if (err) {
-		    return res.status(400).json('Error saving accepted status');
-		}
-		if (event) {
-		    return res.status(201).json(event);
+		    console.error(err);
+		    return res.status(400).json('Oops, something went wrong with addUser');
 		}
 	    });
 	}
@@ -235,22 +227,15 @@ module.exports.addUser = function (req, res) {
 	event.users.push({
 	    user: user_to_add._id	    
 	});
-	event.save(function (err, event) {
+	event.save().exec().then(function (event) {
+	    return Event.populate(event, {path: 'users.user'}).exec();
+	}).then(function (event_pop) {
+	    return res.status(201).json(event_pop);
+	}).catch(function (err) {
 	    if (err) {
-		return res.status(400).json(err);
+		console.error(err);
+		return res.status(400).json('Oops, something went wrong with addUser');
 	    }
-	    Event.populate(
-		event,
-		{path: 'users.user'},
-		function (err, event) {
-		    if (err) {
-			return res.status(400).json(err);
-		    }
-		    if (event) {
-			return res.status(201).json(event);
-		    }
-		}
-	    );
 	});
     }
 };
@@ -258,16 +243,18 @@ module.exports.addUser = function (req, res) {
 module.exports.denyInvite = function (req, res) {
     var event     = req.event;
     var deny_user = req.user;
-    var promise   = Event.findOneAndUpdate({_id: event._id}, {$pull: {users: {user: deny_user._id}}}, {new: true}).exec();
-
-    promise.addErrback(function (err) {
-	if (err) {
-	    return res.status(400).json('Error while removing event');
-	}
-    });
+    var promise   = Event.findOneAndUpdate(
+	{_id: event._id},
+	{$pull: {users: {user: deny_user._id}}},
+	{new: true}
+    ).exec();
 
     promise.then(function (event) {
-	console.log(event.users);
 	return res.status(200).json(event);
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    return res.status(400).json('Oops, something went wrong with denyInvite');
+	}
     });
 };
