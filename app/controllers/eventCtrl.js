@@ -12,15 +12,23 @@ var UserRepository     = require('../repositories/user');
 module.exports.getEvents = function (req, res) {
     var page  = 0;
     var limit = 50000;
-    var query = new RegExp('.*', 'i');
+    var query = {
+	name: new RegExp('.*', 'i')
+    };
     if (req.query.p) {
         page  = req.query.p * 10;
         limit = 10;
     }
-    if (req.query.q) {
-        query = new RegExp(req.query.q, 'i');
+    if (req.query.name) {
+	query.name = new RegExp(req.query.name, 'i');
     }
-    EventRepository.search({name: query}, page, limit, function (err, events) {
+    if (req.query.category) {
+	query.category = new RegExp(req.query.category, 'i');
+    }
+    if (req.query._id) {
+	query._id = req.query._id;
+    }
+    EventRepository.search(query, page, limit, function (err, events) {
 	if (err) {
 	    return res.status(400).json(err);
 	}
@@ -122,7 +130,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
 	    ]
 	};
 	return Event
-	    .findOneAndUpdate(query, params,{new: true, upsert: true})
+	    .findOneAndUpdate(query, params,{new: true, upsert: true, runValidators: true})
 	    .populate('admin users.user locations messages')
 	    .exec();
     }).then(function (event) {

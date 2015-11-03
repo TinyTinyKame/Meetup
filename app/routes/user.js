@@ -11,7 +11,8 @@ module.exports = function (app) {
     app.get('/user/:user_id', user.getUser);
     app.delete('/user/:user_id', user.removeUser);
     app.get('/user/:user_id/history', user.getUserHistoryLocations);
-    app.post('/user/:user_id/location/:location_id/itinerary', user.addItinerary);
-    app.put('/user/gcm', user.addGCMToken);
-    app.delete('/user/gcm', user.removeGCMToken);
+    app.post('/user/location/:location_id/itinerary', user.addItinerary);
+    app.put('/user/location/:location_id/itinerary', user.updateItinerary);
+    app.post('/user/gcm/add', user.addGCMToken);
+    app.delete('/user/gcm/remove', user.removeGCMToken);
 };

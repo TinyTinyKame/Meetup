@@ -137,7 +137,6 @@ module.exports.updateUser = function (req, res) {
     var updated_user = {
 	name: req.body.name,
 	email: req.body.email,
-	gcmToken: req.body.gcmToken,
 	photoUrl: req.body.photoUrl,
 	description: req.body.description
     };
@@ -245,6 +244,10 @@ module.exports.addItinerary = function (req, res) {
     });
 };
 
+module.exports.updateItinerary = function (req, res) {
+    return;
+};
+
 module.exports.getUserHistoryLocations = function (req, res) {
     var user        = req.user;
     var userHistory = Location.find({creator: user._id}).exec();
@@ -265,22 +268,21 @@ module.exports.getUserHistoryLocations = function (req, res) {
 
 module.exports.removeGCMToken = function (req, res) {
     var auth    = jwt.decode(req.token);
-    var promise = User.findOneAndUpdate(
-	{ _id: auth._id },
-	{ $pull: {gcmToken: req.body.gcmToken}},
-	{ new: true }
-    ).exec();
+    var promise = User.findOne({ _id: auth._id }).exec();
 
     promise.then(function (user) {
 	if (!user) {
 	    return res.status(404).json('User not found');
 	} else {
-	    return res.status(201).json(user);
+	    user.gcmToken.pull(req.body.gcmToken);
+	    return user.save();
 	}
+    }).then(function (saved) {
+	return res.status(201).json(saved);
     }).catch(function (err) {
 	if (err) {
 	    console.error(err);
-	    return res.status(400).json('Error fetching user');
+	    return res.status(400).json('Oops, something went wrong with removeGCMToken');
 	}
     });
 };
@@ -288,21 +290,21 @@ module.exports.removeGCMToken = function (req, res) {
 module.exports.addGCMToken = function (req, res) {
     var auth    = jwt.decode(req.token);
     var promise = User.findOneAndUpdate(
-        { _id: auth._id },
-        { $push: {gcmToken: req.body.gcmToken}},
-        { new: true }
+	{ _id: auth._id },
+	{ $push: {gcmToken: req.body.gcmToken}},
+	{ new: true}
     ).exec();
 
     promise.then(function (user) {
         if (!user) {
             return res.status(404).json('User not found');
         } else {
-            return res.status(201).json(user);
-        }
+	    return res.status(201).json(user);
+	}
     }).catch(function (err) {
 	if (err) {
 	    console.error(err);
-	    return res.status(400).json('Error fetching user');
+	    return res.status(400).json('Oops, something went wrong with addGCMToken');
 	}
     });
 };
