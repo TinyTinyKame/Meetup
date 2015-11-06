@@ -71,7 +71,7 @@ module.exports.confirmFriend = function (req, res) {
 
     promise.then(function (user) {
 	friend_to_add.friends.forEach(function (friend, index) {
-	    if (friend.user.equals(user._id) && friend.status === 'Asking') {
+	    if (friend.user.equals(user._id) && friend.status === 'Pending') {
 		friend_to_add.friends[index].status = 'Accepted';
 		found = true;
 		return;
@@ -84,7 +84,7 @@ module.exports.confirmFriend = function (req, res) {
 	}
     }).then(function (user) {
 	user.friends.forEach(function (friend, index) {
-	    if (friend.user.equals(friend_to_add._id) && friend.status === 'Pending') {
+	    if (friend.user.equals(friend_to_add._id) && friend.status === 'Asking') {
 		user.friends[index].status = 'Accepted';
 		found =  true;
 		return;

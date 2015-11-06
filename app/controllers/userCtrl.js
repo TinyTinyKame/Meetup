@@ -6,6 +6,7 @@ var jwt      = require('jsonwebtoken');
 var config   = require('../config');
 var crypto   = require('crypto');
 var buffer   = require('buffer');
+var gcm      = require('node-gcm');
 
 var UserRepository     = require('../repositories/user');
 var LocationRepository = require('../repositories/location');
@@ -134,12 +135,19 @@ module.exports.createUser = function (req, res) {
 
 module.exports.updateUser = function (req, res) {
     var auth = jwt.decode(req.token);
-    var updated_user = {
-	name: req.body.name,
-	email: req.body.email,
-	photoUrl: req.body.photoUrl,
-	description: req.body.description
-    };
+    var updated_user = { };
+    if (req.body.name) {
+	updated_user.name = req.body.name;
+    }
+    if (req.body.email) {
+	updated_user.email = req.body.email;
+    }
+    if (req.body.photoUrl) {
+	updated_user.photoUrl = req.body.photoUrl;
+    }
+    if (req.body.description) {
+	updated_user.description = req.body.description;
+    }
     var promise = User.findOneAndUpdate({_id: auth._id}, updated_user, {new: true}).exec();
     promise.then(function (user) {
 	if (!user) {
@@ -175,7 +183,7 @@ module.exports.setUserLocation = function (req, res) {
     }).then(function (save) {
 	if (save) {
 	    return {
-		event: Event.find({'users.user': save._id}).populate('users').exec(),
+		event: Event.find({'users.user': save._id}).populate('users.user').exec(),
 		user : save
 	    };
 	}

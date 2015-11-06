@@ -50,7 +50,7 @@ module.exports.createMessageForEvent = function (req, res) {
 	}
 	
 	if (create) {
-	    var pmessage = Message.create({ content: req.body.content, author: auth._id}).exec();
+	    var pmessage = Message.create({ content: req.body.content, author: auth._id});
 	    pmessage.then(function (message) {
 		if (message) {
 		    event.messages.push(message);

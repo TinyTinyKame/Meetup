@@ -49,7 +49,7 @@ module.exports.getUserEvents = function (req, res) {
     }
     var pevents = Event
 	.find({ 'users.user': req.user._id})
-	.sort('-created_at')
+	.sort({date: -1})
 	.skip(page)
 	.limit(limit)
 	.populate('admin users.user messages locations messages.author')
@@ -82,14 +82,22 @@ module.exports.getEventUsers = function(req, res) {
     event.users.forEach(function (user) {
 	users.push(user.user);
     });
-    UserRepository.search(page, {_id: {$in: users}}, limit, function (err, users) {
-	if (err) {
-	    return res.status(400).json(err);
-	}
+    var pusers = User
+	.find({ _id: {$in: users}})
+	.sort({name: 1})
+        .skip(page)
+        .limit(limit)
+        .populate('admin users.user messages locations messages.author')
+	.exec();
+    pusers.then(function (users) {	
 	if (users) {
 	    return res.status(200).json(users);
 	} else {
 	    return res.status(404).json('No users for this event');
+	}
+    }).catch(function (err) {
+	if (err) {
+	    return res.status(400).json('Oops, something went wrong with getEventUsers');
 	}
     });
 };
@@ -163,20 +171,24 @@ module.exports.inviteUsers = function (req, res) {
     var users_to_invite = req.body.users;
     var users           = [];
     var gcmTokens       = [];
+    var event_users     = [];
     
     if (users_to_invite.length > 0) {
 	event.users.forEach(function (user) {
-	    if (!tools.inArray(user.user._id, users_to_invite)) {
+	    event_users.push(user.user._id);
+	});
+	users_to_invite.forEach(function (invitees) {
+	    if (!tools.inArray(invitees._id, event_users)) {
 		users.push(
 		    {
-			user: user.user._id,
+			user: invitees._id,
 			status: 'Pending'
 		    }
 		);
-		gcmTokens = gcmTokens.concat(user.user.gcmToken);
+		gcmTokens = gcmTokens.concat(invitees.gcmToken);
 	    }
 	});
-	
+	console.log(users);
 	if (users.length > 0) {
 	    event.users = event.users.concat(users);
 	    var promise = event.save();
