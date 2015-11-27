@@ -4,6 +4,7 @@ var User    = require('../models/user');
 var jwt     = require('jsonwebtoken');
 var gcm     = require('node-gcm');
 
+//Get all messages for an event
 module.exports.getMessagesForEvent = function (req, res) {
     var event    = req.event;
     var messages = event.messages;
@@ -17,12 +18,14 @@ module.exports.getMessagesForEvent = function (req, res) {
     });
 };
 
+//Create a message for an event
 module.exports.createMessageForEvent = function (req, res) {
     var event = req.event;
     var auth  = jwt.decode(req.token);
     var create = false;
     var muted  = false;
 
+    // if user is muted, then user can't send a message
     event.users.forEach(function (user) {
 	if (user.user._id.equals(auth._id) && user.mute) {
 	    muted = true;
@@ -31,6 +34,8 @@ module.exports.createMessageForEvent = function (req, res) {
     });
 
     if (!muted) {
+	// get all messages from the author, if more than 3 messages are sent
+	// within 10 minutes, then he is stopped
 	var last_msg = [];
 	var messages = event.messages;
 	messages.reverse().forEach(function (message) {
@@ -49,6 +54,8 @@ module.exports.createMessageForEvent = function (req, res) {
 	    create = true;
 	}
 	
+	//We create the messsage, if everything is fine, then send a notification to all
+	//users in the event
 	if (create) {
 	    var pmessage = Message.create({ content: req.body.content, author: auth._id});
 	    pmessage.then(function (message) {
@@ -94,6 +101,7 @@ module.exports.createMessageForEvent = function (req, res) {
     }
 };
 
+//Mute a user
 module.exports.muteUser = function (req, res) {
     var auth         = jwt.decode(req.token);
     var event        = req.event;
@@ -123,6 +131,7 @@ module.exports.muteUser = function (req, res) {
     }
 };
 
+//Unmute a user
 module.exports.unmuteUser = function (req, res) {
     var auth         = jwt.decode(req.token);
     var event        = req.event;

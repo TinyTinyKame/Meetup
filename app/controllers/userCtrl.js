@@ -11,6 +11,7 @@ var gcm      = require('node-gcm');
 var UserRepository     = require('../repositories/user');
 var LocationRepository = require('../repositories/location');
 
+//Search user
 module.exports.getUsers = function (req, res) {
     var page  = 0;
     var limit = 50000;
@@ -35,10 +36,12 @@ module.exports.getUsers = function (req, res) {
     });
 };
 
+//Get one user
 module.exports.getUser = function (req, res) {
     return res.status(200).json(req.user);
 };
 
+//Remove one user, only done by a special user
 module.exports.removeUser = function (req, res) {
     var user = req.user;
     var auth = jwt.decode(req.token);
@@ -59,6 +62,7 @@ module.exports.removeUser = function (req, res) {
     }
 };
 
+//Set parameters when creating a user
 var setParamsForUser = function (req) {
     var pass   = '';
     var user = {
@@ -68,6 +72,7 @@ var setParamsForUser = function (req) {
         photoUrl: req.body.photoUrl,
         description: req.body.description
     };
+    //If social network login, we check if login is successful
     if (req.body.social) {
 	var decipher = crypto.createDecipher('aes-128-ecb', config.secret);	
 	chunks = []
@@ -83,6 +88,7 @@ var setParamsForUser = function (req) {
 	    return 'Error with social login';
         }
     } else if (req.body.password) {
+	// else we create the password
         var salt = bcrypt.genSaltSync(12);
         pass     = '!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password;
         pass     = bcrypt.hashSync(pass, salt);
@@ -93,6 +99,7 @@ var setParamsForUser = function (req) {
     return user;
 };
 
+//Create a user
 module.exports.createUser = function (req, res) {
     var new_user = setParamsForUser(req);
     var promise  = User.findOne({email: req.body.email}).exec();
@@ -133,6 +140,7 @@ module.exports.createUser = function (req, res) {
     }
 };
 
+//Update a user
 module.exports.updateUser = function (req, res) {
     var auth = jwt.decode(req.token);
     var updated_user = { };
@@ -163,6 +171,8 @@ module.exports.updateUser = function (req, res) {
     });
 };
 
+//Set a location for a user
+//When the location is set, we send a notification to all users that are in the same events
 module.exports.setUserLocation = function (req, res) {
     if (!req.body.latitude) {
 	return res.status(400).json('No latitude');
@@ -226,6 +236,7 @@ module.exports.setUserLocation = function (req, res) {
     });
 };
 
+//Insert itinerary
 module.exports.addItinerary = function (req, res) {
     var user     = req.user;
     var location = req.location;
@@ -252,10 +263,12 @@ module.exports.addItinerary = function (req, res) {
     });
 };
 
+//Update itinerary
 module.exports.updateItinerary = function (req, res) {
     return;
 };
 
+//Get all locations that user have been
 module.exports.getUserHistoryLocations = function (req, res) {
     var user        = req.user;
     var userHistory = Location.find({creator: user._id}).exec();
@@ -274,6 +287,7 @@ module.exports.getUserHistoryLocations = function (req, res) {
     });
 };
 
+//Remove gcmToken
 module.exports.removeGCMToken = function (req, res) {
     var auth    = jwt.decode(req.token);
     var promise = User.findOne({ _id: auth._id }).exec();
@@ -295,6 +309,7 @@ module.exports.removeGCMToken = function (req, res) {
     });
 };
 
+//Add a gcmToken to a user
 module.exports.addGCMToken = function (req, res) {
     var auth    = jwt.decode(req.token);
     var promise = User.findOneAndUpdate(

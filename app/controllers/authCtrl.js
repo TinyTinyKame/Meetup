@@ -6,6 +6,7 @@ var crypto = require('crypto');
 var buffer = require('buffer');
 var tools  = require('../tools');
 
+//Allows the use without middlewares
 module.exports.unless = function (paths, middleware) {
     return function(req, res, next) {
         if (tools.inArray(req.path, paths) && 'POST' === req.method) {
@@ -16,9 +17,11 @@ module.exports.unless = function (paths, middleware) {
     };
 };
 
+//Login, send web token if login is successful
 module.exports.login = function (req, res) {
     var promise = User.findOne({email: req.body.email}).exec();
     var social  = '';
+    // Password Encoding
     if (req.body.social && req.body.social != '') {
         var decipher = crypto.createDecipher('aes-128-ecb', config.secret);
         chunks = []
@@ -30,6 +33,7 @@ module.exports.login = function (req, res) {
 	social = social.replace(regex, '');
 	social = social.split(':');
     }
+    // if login is successful, token is sent
     promise.then(function (user) {
 	if (!user) {
 	    return res.status(404).json('User not found');
@@ -41,7 +45,7 @@ module.exports.login = function (req, res) {
                 gcmToken: user.gcmToken,
                 permission: user.permission
             }
-	    
+	    // check password with bcrypt
 	    if (social != '' || bcrypt.compareSync('!L#md54&' + req.body.password + '.C5d2:f7' + req.body.password + req.body.password, user.password)) {
 		var token = jwt.sign(data, config.secret);
 		return res.status(200).json({
@@ -60,6 +64,7 @@ module.exports.login = function (req, res) {
     });
 };
 
+// middleware that checks the token for almost every action
 module.exports.checkAuth = function (req, res, next) {
     var token = req.body.auth || req.headers['authorization'];
     if (token) {

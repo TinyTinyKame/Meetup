@@ -9,6 +9,10 @@ var EventRepository    = require('../repositories/event');
 var LocationRepository = require('../repositories/location');
 var UserRepository     = require('../repositories/user');
 
+//Get all events with some parameters
+//p: page
+//limit: number of events by page
+//can search by category, name or _id
 module.exports.getEvents = function (req, res) {
     var page  = 0;
     var limit = 50000;
@@ -40,6 +44,7 @@ module.exports.getEvents = function (req, res) {
     });
 };
 
+//Get all events of a user
 module.exports.getUserEvents = function (req, res) {
     var page  = 0;
     var limit = 50000;
@@ -70,6 +75,7 @@ module.exports.getUserEvents = function (req, res) {
     });
 };
 
+//Get all users of an event
 module.exports.getEventUsers = function(req, res) {
     var event = req.event;
     var page  = 0;
@@ -102,6 +108,7 @@ module.exports.getEventUsers = function(req, res) {
     });
 };
 
+//Create or update an event
 module.exports.createOrUpdateEvent = function (req, res) {
     var auth = jwt.decode(req.token);
     var params = {
@@ -116,6 +123,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
 	params,
 	{new: true, upsert: true}
     ).exec();
+    //parameters for location, if it exists, we get it or create it if it doesn't
     promise.then(function (location) {
 	var query = {
 	    name: req.body.name,
@@ -137,6 +145,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
 		}
 	    ]
 	};
+	//if event exists, we update it or just create it if not
 	return Event
 	    .findOneAndUpdate(query, params,{new: true, upsert: true, runValidators: true})
 	    .populate('admin users.user locations messages')
@@ -151,6 +160,7 @@ module.exports.createOrUpdateEvent = function (req, res) {
     });
 };
 
+//Delete an event, only the admin of the event can do it
 module.exports.deleteEvent = function (req, res) {
     var event = req.event;
     var auth  = jwt.decode(req.token);
@@ -166,6 +176,7 @@ module.exports.deleteEvent = function (req, res) {
     }
 };
 
+//Invite users to an event
 module.exports.inviteUsers = function (req, res) {
     var event           = req.event;
     var users_to_invite = req.body.users;
@@ -173,6 +184,7 @@ module.exports.inviteUsers = function (req, res) {
     var gcmTokens       = [];
     var event_users     = [];
     
+    //check if invitees is already in event
     if (users_to_invite.length > 0) {
 	event.users.forEach(function (user) {
 	    event_users.push(user.user._id);
@@ -188,7 +200,8 @@ module.exports.inviteUsers = function (req, res) {
 		gcmTokens = gcmTokens.concat(invitees.gcmToken);
 	    }
 	});
-	console.log(users);
+	// if some people are not in the event, we add them to the event with
+	// status pending and send them a notification
 	if (users.length > 0) {
 	    event.users = event.users.concat(users);
 	    var promise = event.save();
@@ -221,18 +234,18 @@ module.exports.inviteUsers = function (req, res) {
     }
 };
 
+//Add a user to an event
 module.exports.addUser = function (req, res) {
     var event        = req.event;
     var user_to_add  = req.user;
     var found        = false;
 
+    //check if user is inside event or not, if it is, just change the status
     event.users.forEach(function (user, index) {
 	if (user.user._id.equals(user_to_add._id)) {
 	    found = true;
-	    console.log(event);
 	    event.users[index].status = "Accepted";
 	    event.save().then(function (event) {
-		console.log("test");
 		return res.status(201).json(event);
 	    }).catch(function (err) {
 		if (err) {
@@ -243,13 +256,17 @@ module.exports.addUser = function (req, res) {
 	}
     });
 
+    //if user is not found as a user, then we push a new one
+    //that's mostly used when people want to get in an event
     if (!found) {
 	event.users.push({
-	    user: user_to_add._id	    
+	    user: user_to_add._id,
 	});
-	event.save().exec().then(function (event) {
-	    return Event.populate(event, {path: 'users.user'}).exec();
+	event.save().then(function (event) {
+	    console.log(event);
+	    return event.populate('users.user').execPopulate();
 	}).then(function (event_pop) {
+	    console.log(event_pop);
 	    return res.status(201).json(event_pop);
 	}).catch(function (err) {
 	    if (err) {
@@ -260,6 +277,7 @@ module.exports.addUser = function (req, res) {
     }
 };
 
+//Deny invitations
 module.exports.denyInvite = function (req, res) {
     var event     = req.event;
     var deny_user = req.user;
@@ -275,6 +293,78 @@ module.exports.denyInvite = function (req, res) {
 	if (err) {
 	    console.error(err);
 	    return res.status(400).json('Oops, something went wrong with denyInvite');
+	}
+    });
+};
+
+//Get events from around my location
+//It uses 2 points that are used to define the zone
+module.exports.searchAroundMe = function (req, res) {
+    var found_loc = [ ];
+    var promise   = Location
+	.find(
+	    {
+		latitude: {
+		    $gt: req.query.p2lat,
+		    $lt: req.query.p1lat
+		},
+		longitude: {
+		    $gt: req.query.p2lng,
+		    $lt: req.query.p1lng
+		}
+	    }
+	).exec();
+    //get location around me, with 2 points
+    promise.then(function (locations) {
+	if (locations) {
+	    locations.forEach(function (location) {
+		found_loc.push(location._id);
+	    });
+	    return Event
+		.find({locations: { $in: found_loc }})
+		.populate('locations admin users.user')
+		.exec();
+	} else {
+	    throw new Error('No location found');
+	}
+    }).then(function (events) {
+	//get all events with these locations
+	var ret           = { };
+	var formatted_ret = [];
+	if (events) {
+	    events.forEach(function (event) {
+		if (ret[event.locations[0]._id] === undefined) {
+		    ret[event.locations[0]._id] = [ ];
+		}
+		ret[event.locations[0]._id].push(
+		    {
+			_id: event._id,
+			name: event.name,
+			category: event.category,
+			locations: event.locations[0],
+			admin: event.admin,
+			date: event.date,
+			users: event.users
+		    }
+		);
+	    });
+	    
+	    found_loc.forEach(function (location) {
+		formatted_ret.push(ret[location]);
+	    });
+
+	    return res.status(200).json(formatted_ret);
+	} else {
+	    return res.status(404).json('No event found');
+	}
+    }).catch(function (err) {
+	if (err) {
+	    console.error(err);
+	    if (err.message.match(/No location found/)) {
+		return res.status(404).json(err.message);
+	    } else {
+		return res.status(400).json('Oops, something went wrong with searchAroundMe');
+	    }
 	}
     });
 };

@@ -5,6 +5,7 @@ var jwt  = require('jsonwebtoken');
 var UserRepository   = require('../repositories/user');
 var FriendRepository = require('../repositories/friend');
 
+//Get user's friends
 module.exports.getFriends = function (req, res) {
     var user = req.user;
     if (user.friends.length <= 0) {
@@ -13,6 +14,7 @@ module.exports.getFriends = function (req, res) {
     return res.status(200).json(user.friends);
 };
 
+//Send a friend request
 module.exports.friendRequest = function (req, res) {
     var auth    = jwt.decode(req.token);
     var friend  = req.friend;
@@ -21,7 +23,8 @@ module.exports.friendRequest = function (req, res) {
     if (friend._id.equals(auth._id)) {
 	return res.status(409).json('Logged user and friend are the same');
     }
-    
+    //First we insert the user in the friends
+    //If friend already exists, then we do nothing
     promise.then(function (user) {
 	var found = false;
 	user.friends.forEach(function (friend_comp) {
@@ -36,9 +39,11 @@ module.exports.friendRequest = function (req, res) {
 	    return user;
 	}
     }).then(function (user) {
+	//Then we insert the friend in the user
 	user.friends.push({user: friend._id, status: 'Pending'});
 	return user.save();
     }).then(function (saved) {
+	//when everything is fine, then we send a friend request to the friend
 	var message = new gcm.Message();
 	var regIds  = friend.gcmToken;
 	var sender  = new gcm.Sender('AIzaSyBzbVdR8YZ2I0xvGnRfjbq_s3kLzOswEnk');
@@ -63,12 +68,14 @@ module.exports.friendRequest = function (req, res) {
     });
 };
 
+//Confirm friendship
 module.exports.confirmFriend = function (req, res) {
     var friend_to_add = req.friend;
     var auth          = jwt.decode(req.token);
     var promise       = User.findOne({_id: auth._id}).exec();
     var found         = false;
 
+    //We check the ids and status, if it's okay, then we set the status as accepted
     promise.then(function (user) {
 	friend_to_add.friends.forEach(function (friend, index) {
 	    if (friend.user.equals(user._id) && friend.status === 'Pending') {
@@ -96,6 +103,7 @@ module.exports.confirmFriend = function (req, res) {
 	    throw new Error('No friend found');
 	}
     }).then(function (user) {
+	// save all the changes if there's no error
 	friend_to_add.save();
 	user.save();
 	if (user) {
@@ -116,7 +124,8 @@ module.exports.confirmFriend = function (req, res) {
 	}
     });
 };
-    
+
+//Remove friendship
 module.exports.deleteFriend = function (req, res) {
     var friend  = req.friend;
     var auth    = jwt.decode(req.token);

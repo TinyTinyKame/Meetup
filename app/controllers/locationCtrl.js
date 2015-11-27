@@ -3,6 +3,7 @@ var jwt      = require('jsonwebtoken');
 
 var LocationRepository = require('../repositories/location');
 
+//Get all locations
 module.exports.getLocations = function (req, res) {
     var page  = 0;
     var limit = 50000;
@@ -27,6 +28,7 @@ module.exports.getLocations = function (req, res) {
     });
 };
 
+//Create or update a location
 module.exports.addOrUpdateLocation = function(req, res) {
     var auth = jwt.verify(req.token);
     var params = {
